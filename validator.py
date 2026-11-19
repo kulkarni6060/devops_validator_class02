@@ -71,8 +71,19 @@ def load(path):
                     # Do not echo the line: it could contain a secret.
                     raise ValueError(f"line {number} is not in KEY=value format")
                 key, value = line.split("=", 1)
-                values[key.strip()] = value.strip()
+                values[key.strip()] = _unquote(value.strip())
     return values
+
+
+def _unquote(value):
+    """Remove one pair of matching surrounding quotes: "x" or 'x' -> x.
+
+    Without this, DB_PASSWORD="" would be read as the two-character string
+    '""' and pass the nonempty check (found in peer review).
+    """
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        return value[1:-1]
+    return value
 
 
 if __name__ == "__main__":
