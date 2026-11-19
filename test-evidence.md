@@ -18,7 +18,7 @@ From the repository root, run all 20 cases with one command:
 python3 run_tests.py      # Windows: py run_tests.py
 ```
 
-Every line should say `PASS`, ending with `20/20 cases behaved as expected`.
+Every line should say `PASS`, ending with `25/25 cases behaved as expected`.
 `PASS` means the validator gave the **expected** result. For a bad file, that means
 it was rejected with exit code 1 or 2. The runner also fails a case if the dummy
 password `example-only-placeholder` ever appears in the output.
@@ -74,6 +74,7 @@ Exit code: 1
 | `valid.env.example` | all four rules satisfied | 0 | 0 | PASS |
 | `test-cases/good-port-min-1024.env.example` | lowest allowed port | 0 | 0 | PASS |
 | `test-cases/good-port-max-65535.env.example` | highest allowed port | 0 | 0 | PASS |
+| `test-cases/good-quoted-values.env.example` | `APP_PORT="8080"` etc. are unquoted | 0 | 0 | PASS |
 | `messy.env` | supplied broken file | 1 | 1 | PASS |
 | `test-cases/bad-port.env.example` | port 80 (privileged) | 1 | 1 | PASS |
 | `test-cases/bad-port-1023.env.example` | one below the minimum | 1 | 1 | PASS |
@@ -82,17 +83,21 @@ Exit code: 1
 | `test-cases/bad-port-negative.env.example` | `-8080` | 1 | 1 | PASS |
 | `test-cases/bad-port-decimal.env.example` | `8080.5` | 1 | 1 | PASS |
 | `test-cases/bad-port-empty.env.example` | empty port | 1 | 1 | PASS |
+| `test-cases/bad-port-missing.env.example` | no `APP_PORT` key (peer review) | 1 | 1 | PASS |
 | `test-cases/bad-debug-true.env.example` | `DEBUG=true` | 1 | 1 | PASS |
 | `test-cases/bad-debug-capital-false.env.example` | `DEBUG=False` | 1 | 1 | PASS |
 | `test-cases/bad-debug-missing.env.example` | no `DEBUG` key | 1 | 1 | PASS |
 | `test-cases/bad-db-host-legacy-only.env.example` | only `dbhost` | 1 | 1 | PASS |
 | `test-cases/bad-db-host-empty.env.example` | `DB_HOST=` | 1 | 1 | PASS |
+| `test-cases/bad-db-host-empty-quotes.env.example` | `DB_HOST=''` (peer review) | 1 | 1 | PASS |
+| `test-cases/bad-db-host-quoted-spaces.env.example` | `DB_HOST="  "` | 1 | 1 | PASS |
 | `test-cases/bad-password-missing.env.example` | no `DB_PASSWORD` key | 1 | 1 | PASS |
 | `test-cases/bad-password-empty.env.example` | `DB_PASSWORD=` | 1 | 1 | PASS |
+| `test-cases/bad-password-empty-quotes.env.example` | `DB_PASSWORD=""` (peer review) | 1 | 1 | PASS |
 | `test-cases/bad-malformed-line.env.example` | line without `=` | 2 | 2 | PASS |
 | `test-cases/does-not-exist.env` | file not found | 2 | 2 | PASS |
 
-**Result: 20/20.** The password value did not appear in any output.
+**Result: 25/25** (20 original cases + 5 added after peer review). The password value did not appear in any output.
 
 ## Secret handling
 
@@ -102,10 +107,21 @@ Exit code: 1
 
 ## Peer review
 
-_To be filled in after review._
-
-- **Reviewer:** 
-- **Date:** 
-- **Negative test reproduced:** 
-- **Comment:** 
-- **My response / follow-up commit:** 
+- **Reviewer:** itz-sajjad
+- **Date:** 2026-11-19 (comment on PR #1)
+- **Negative tests reproduced:** `test-cases/bad-port.env.example` and `messy.env`, both exit code `1`.
+  `run_tests.py` gave 20/20, and `DB_PASSWORD` was never printed.
+- **Comment (summary):**
+  1. `DB_PASSWORD=""` or `DB_HOST=""` (empty quotes) is accepted with exit code 0. `.strip()`
+     removes only whitespace, so the value stays as the two-character string `""`.
+  2. Add a `bad-port-missing.env.example` test for a missing `APP_PORT` key, to match the
+     missing-key tests for `DEBUG` and `DB_PASSWORD`.
+- **Confirmed before fixing:** the original validator printed `Configuration accepted` (exit 0)
+  for `DB_PASSWORD=""`.
+- **My response (follow-up commit):**
+  - `load()` now removes one pair of matching surrounding quotes (`"x"` or `'x'` becomes `x`).
+    Empty quoted values are therefore rejected, and correctly quoted values such as
+    `APP_PORT="8080"` are accepted.
+  - Added tests: `bad-password-empty-quotes`, `bad-db-host-empty-quotes`,
+    `bad-db-host-quoted-spaces`, `bad-port-missing` (all exit 1) and `good-quoted-values` (exit 0).
+  - After the fix, `DB_PASSWORD=""` gives `DB_PASSWORD: empty` with exit code 1. Result: 25/25.
